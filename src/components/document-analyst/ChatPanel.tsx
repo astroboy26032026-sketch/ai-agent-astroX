@@ -133,9 +133,17 @@ export default function ChatPanel({ selectedDoc }: ChatPanelProps) {
                     </button>
                   ))}
 
-                  {/* Nút chuyển sang Kanban Task Board */}
+                  {/* Nút chuyển sang Kanban Task Board với nội dung tài liệu */}
                   <button
-                    onClick={() => router.push('/todo-tasks')}
+                    onClick={() => {
+                      if (selectedDoc) {
+                        try {
+                          sessionStorage.setItem('break_task_content', selectedDoc.content)
+                          sessionStorage.setItem('break_task_docname', selectedDoc.name)
+                        } catch { /* ignore */ }
+                      }
+                      router.push('/todo-tasks?from=document')
+                    }}
                     className="flex items-center gap-1.5 rounded-full border border-indigo-500/40 bg-indigo-500/10 px-3 py-1.5 text-xs font-medium text-indigo-300 transition-colors hover:bg-indigo-500/20"
                   >
                     <LayoutGrid size={12} aria-hidden />
@@ -191,7 +199,15 @@ export default function ChatPanel({ selectedDoc }: ChatPanelProps) {
                 {/* Gợi ý Task Board nếu AI đề cập đến task/breakdown */}
                 {msg.role === 'assistant' && shouldShowTaskButton(msg.content) && (
                   <button
-                    onClick={() => router.push('/todo-tasks')}
+                    onClick={() => {
+                      if (selectedDoc) {
+                        try {
+                          sessionStorage.setItem('break_task_content', selectedDoc.content)
+                          sessionStorage.setItem('break_task_docname', selectedDoc.name)
+                        } catch { /* ignore */ }
+                      }
+                      router.push('/todo-tasks?from=document')
+                    }}
                     className="mt-2 flex items-center gap-1.5 rounded-full border border-indigo-500/40 bg-indigo-500/10 px-3 py-1 text-xs font-medium text-indigo-300 transition-colors hover:bg-indigo-500/20"
                   >
                     <LayoutGrid size={11} aria-hidden />

@@ -1,8 +1,9 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
-import { ArrowLeft, Plus } from 'lucide-react'
-import { useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { ArrowLeft, Plus, Sparkles, Loader2, X, ChevronDown, ChevronUp } from 'lucide-react'
+import { useState, useEffect, Suspense } from 'react'
+import { useAISettings } from '@/hooks/use-ai-settings'
 
 interface Task {
   id: string
@@ -30,56 +31,101 @@ const STATUS_COLORS = {
   'done':        'bg-emerald-500/20 text-emerald-400',
 }
 
-const INITIAL_COLUMNS: Column[] = [
-  {
-    id: 'devops',
-    title: 'DevOps',
-    color: 'from-orange-500 to-amber-500',
-    tasks: [
-      { id: 'd1', title: 'Cấu hình CI/CD pipeline', priority: 'high', status: 'todo' },
-      { id: 'd2', title: 'Setup Docker Compose cho môi trường dev', priority: 'medium', status: 'in-progress' },
-      { id: 'd3', title: 'Cấu hình biến môi trường production', priority: 'high', status: 'todo' },
-    ],
-  },
-  {
-    id: 'be',
-    title: 'Backend',
-    color: 'from-blue-500 to-cyan-500',
-    tasks: [
-      { id: 'b1', title: 'API nhận và parse file PDF/Word', priority: 'high', status: 'in-progress' },
-      { id: 'b2', title: 'Tích hợp Mistral AI streaming', priority: 'high', status: 'in-progress' },
-      { id: 'b3', title: 'Route /api/document-chat', priority: 'medium', status: 'done' },
-      { id: 'b4', title: 'Xác thực và rate limiting API', priority: 'low', status: 'todo' },
-    ],
-  },
-  {
-    id: 'fe',
-    title: 'Frontend',
-    color: 'from-violet-500 to-purple-500',
-    tasks: [
-      { id: 'f1', title: 'Giao diện upload tài liệu', priority: 'high', status: 'done' },
-      { id: 'f2', title: 'Chat panel với streaming response', priority: 'high', status: 'in-progress' },
-      { id: 'f3', title: 'Trang Kanban task management', priority: 'medium', status: 'in-progress' },
-      { id: 'f4', title: 'Selector model AI', priority: 'low', status: 'done' },
-    ],
-  },
-  {
-    id: 'qa',
-    title: 'QA',
-    color: 'from-emerald-500 to-teal-500',
-    tasks: [
-      { id: 'q1', title: 'Test upload file PDF lớn (>10MB)', priority: 'high', status: 'todo' },
-      { id: 'q2', title: 'Kiểm tra streaming trên Safari/iOS', priority: 'medium', status: 'todo' },
-      { id: 'q3', title: 'Test multi-provider (Mistral/Groq/Anthropic)', priority: 'medium', status: 'todo' },
-    ],
-  },
+const COLUMN_COLORS: Record<string, string> = {
+  devops: 'from-orange-500 to-amber-500',
+  be: 'from-blue-500 to-cyan-500',
+  fe: 'from-violet-500 to-purple-500',
+  qa: 'from-emerald-500 to-teal-500',
+}
+
+const EMPTY_COLUMNS: Column[] = [
+  { id: 'devops', title: 'DevOps', color: COLUMN_COLORS.devops, tasks: [] },
+  { id: 'be', title: 'Backend', color: COLUMN_COLORS.be, tasks: [] },
+  { id: 'fe', title: 'Frontend', color: COLUMN_COLORS.fe, tasks: [] },
+  { id: 'qa', title: 'QA', color: COLUMN_COLORS.qa, tasks: [] },
 ]
 
-export default function TodoTasksPage() {
+function TodoTasksContent() {
   const router = useRouter()
-  const [columns, setColumns] = useState<Column[]>(INITIAL_COLUMNS)
+  const searchParams = useSearchParams()
+  const { settings } = useAISettings()
+
+  const [columns, setColumns] = useState<Column[]>(EMPTY_COLUMNS)
   const [addingIn, setAddingIn] = useState<string | null>(null)
   const [newTaskTitle, setNewTaskTitle] = useState('')
+
+  // AI breakdown state
+  const [aiInput, setAiInput] = useState('')
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [aiError, setAiError] = useState<string | null>(null)
+  const [showAiPanel, setShowAiPanel] = useState(true)
+
+  // Nhận nội dung tài liệu từ Document Analyst qua sessionStorage
+  useEffect(() => {
+    const fromDoc = searchParams.get('from') === 'document'
+    if (fromDoc) {
+      try {
+        const content = sessionStorage.getItem('break_task_content')
+        const docName = sessionStorage.getItem('break_task_docname')
+        if (content) {
+          setAiInput(docName ? `[Tài liệu: ${docName}]\n\n${content}` : content)
+          sessionStorage.removeItem('break_task_content')
+          sessionStorage.removeItem('break_task_docname')
+        }
+      } catch { /* ignore */ }
+    }
+  }, [searchParams])
+
+  const generateTasks = async () => {
+    if (!aiInput.trim()) return
+    setIsGenerating(true)
+    setAiError(null)
+
+    try {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'x-provider': settings.provider,
+        'x-model': settings.modelId,
+        ...(settings.apiKey ? { 'x-api-key': settings.apiKey } : {}),
+      }
+
+      const res = await fetch('/api/break-tasks', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ description: aiInput }),
+      })
+
+      const data = await res.json()
+      if (!res.ok) {
+        setAiError(data.error || 'Lỗi khi gọi AI')
+        return
+      }
+
+      // Map AI response vào columns
+      const newColumns: Column[] = EMPTY_COLUMNS.map((col) => {
+        const aiCol = data.columns?.find(
+          (c: { id: string }) => c.id === col.id
+        )
+        if (!aiCol) return { ...col, tasks: [] }
+        return {
+          ...col,
+          tasks: aiCol.tasks.map((t: { title: string; priority: string }, i: number) => ({
+            id: `${col.id}-${Date.now()}-${i}`,
+            title: t.title,
+            priority: t.priority as Task['priority'],
+            status: 'todo' as Task['status'],
+          })),
+        }
+      })
+
+      setColumns(newColumns)
+      setShowAiPanel(false)
+    } catch {
+      setAiError('Lỗi kết nối. Vui lòng thử lại.')
+    } finally {
+      setIsGenerating(false)
+    }
+  }
 
   const addTask = (columnId: string) => {
     if (!newTaskTitle.trim()) { setAddingIn(null); return }
@@ -113,6 +159,8 @@ export default function TodoTasksPage() {
     )
   }
 
+  const totalTasks = columns.reduce((sum, c) => sum + c.tasks.length, 0)
+
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-black">
       {/* Header */}
@@ -126,10 +174,73 @@ export default function TodoTasksPage() {
         </button>
         <div className="h-4 w-px bg-white/10" />
         <h1 className="text-sm font-semibold text-white/80">Task Board</h1>
-        <span className="rounded-full bg-indigo-500/20 px-2 py-0.5 text-[10px] font-medium text-indigo-400 ml-1">
-          Sample
-        </span>
+
+        {/* Toggle AI panel */}
+        <button
+          onClick={() => setShowAiPanel(!showAiPanel)}
+          className="ml-auto flex items-center gap-1.5 rounded-full border border-indigo-500/30 bg-indigo-500/10 px-3 py-1 text-[11px] font-medium text-indigo-300 transition-colors hover:bg-indigo-500/20"
+        >
+          <Sparkles size={12} />
+          AI Break Task
+          {showAiPanel ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+        </button>
       </div>
+
+      {/* AI Panel */}
+      {showAiPanel && (
+        <div className="border-b border-white/10 bg-white/[0.02] px-5 py-4">
+          <div className="mx-auto max-w-2xl">
+            <div className="flex items-start gap-3">
+              <div className="mt-1 rounded-full bg-indigo-500/20 p-2">
+                <Sparkles size={14} className="text-indigo-400" />
+              </div>
+              <div className="flex-1">
+                <p className="text-xs font-medium text-white/70 mb-2">
+                  Mô tả dự án hoặc dán nội dung tài liệu — AI sẽ tự động phân tách thành các task
+                </p>
+                <textarea
+                  value={aiInput}
+                  onChange={(e) => setAiInput(e.target.value)}
+                  placeholder="Ví dụ: Xây dựng hệ thống e-commerce với Next.js, có tính năng giỏ hàng, thanh toán Stripe, quản lý sản phẩm..."
+                  rows={3}
+                  className="w-full resize-none rounded-xl border border-white/10 bg-white/5 px-3.5 py-2.5 text-sm text-white outline-none transition-all focus:border-indigo-500/40 focus:ring-1 focus:ring-indigo-500/30 placeholder:text-white/20"
+                />
+                <div className="mt-2 flex items-center gap-2">
+                  <button
+                    onClick={generateTasks}
+                    disabled={isGenerating || !aiInput.trim()}
+                    className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2 text-xs font-medium text-white transition-all hover:bg-indigo-700 disabled:opacity-40"
+                  >
+                    {isGenerating ? (
+                      <>
+                        <Loader2 size={13} className="animate-spin" />
+                        Đang phân tích...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles size={13} />
+                        Tạo task
+                      </>
+                    )}
+                  </button>
+                  {totalTasks > 0 && (
+                    <button
+                      onClick={() => { setColumns(EMPTY_COLUMNS); setShowAiPanel(true) }}
+                      className="flex items-center gap-1 rounded-lg border border-white/10 px-3 py-2 text-xs text-white/40 hover:text-white/60 transition-colors"
+                    >
+                      <X size={12} />
+                      Xoá board
+                    </button>
+                  )}
+                  {aiError && (
+                    <span className="text-xs text-red-400">{aiError}</span>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Kanban columns */}
       <div className="flex flex-1 gap-4 overflow-x-auto overflow-y-hidden p-5">
@@ -158,6 +269,9 @@ export default function TodoTasksPage() {
 
               {/* Tasks */}
               <div className="flex flex-1 flex-col gap-2 overflow-y-auto px-3 pb-2">
+                {col.tasks.length === 0 && !addingIn && (
+                  <p className="px-2 py-4 text-center text-[11px] text-white/15">Chưa có task</p>
+                )}
                 {col.tasks.map((task) => (
                   <div
                     key={task.id}
@@ -213,8 +327,16 @@ export default function TodoTasksPage() {
       </div>
 
       <p className="pb-3 text-center text-[10px] text-white/20">
-        Click vào task để chuyển trạng thái · Đây là sample board
+        Click vào task để chuyển trạng thái · AI Break Task tạo task tự động từ mô tả
       </p>
     </div>
+  )
+}
+
+export default function TodoTasksPage() {
+  return (
+    <Suspense>
+      <TodoTasksContent />
+    </Suspense>
   )
 }
