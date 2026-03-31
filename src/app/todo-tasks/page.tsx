@@ -59,6 +59,7 @@ function TodoTasksContent() {
   const [isGenerating, setIsGenerating] = useState(false)
   const [aiError, setAiError] = useState<string | null>(null)
   const [showAiPanel, setShowAiPanel] = useState(true)
+  const [notTechnical, setNotTechnical] = useState<{ reason: string; documentType: string } | null>(null)
 
   // Nhận nội dung tài liệu từ Document Analyst qua sessionStorage
   useEffect(() => {
@@ -80,6 +81,7 @@ function TodoTasksContent() {
     if (!aiInput.trim()) return
     setIsGenerating(true)
     setAiError(null)
+    setNotTechnical(null)
 
     try {
       const headers: Record<string, string> = {
@@ -101,7 +103,13 @@ function TodoTasksContent() {
         return
       }
 
-      // Map AI response vào columns
+      // Bước 1: Kiểm tra tài liệu có phải kỹ thuật không
+      if (data.isTechnical === false) {
+        setNotTechnical({ reason: data.reason, documentType: data.documentType })
+        return
+      }
+
+      // Bước 2: Map AI response vào columns
       const newColumns: Column[] = EMPTY_COLUMNS.map((col) => {
         const aiCol = data.columns?.find(
           (c: { id: string }) => c.id === col.id
@@ -119,6 +127,7 @@ function TodoTasksContent() {
       })
 
       setColumns(newColumns)
+      setNotTechnical(null)
       setShowAiPanel(false)
     } catch {
       setAiError('Lỗi kết nối. Vui lòng thử lại.')
@@ -236,6 +245,24 @@ function TodoTasksContent() {
                     <span className="text-xs text-red-400">{aiError}</span>
                   )}
                 </div>
+
+                {/* Cảnh báo: không phải tài liệu kỹ thuật */}
+                {notTechnical && (
+                  <div className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3">
+                    <p className="text-xs font-medium text-amber-300">
+                      Không phải tài liệu kỹ thuật phần mềm
+                    </p>
+                    <p className="mt-1 text-[11px] text-amber-200/70">
+                      <span className="font-medium">Loại tài liệu:</span> {notTechnical.documentType}
+                    </p>
+                    <p className="mt-0.5 text-[11px] text-amber-200/70">
+                      {notTechnical.reason}
+                    </p>
+                    <p className="mt-2 text-[11px] text-white/40">
+                      Chỉ hỗ trợ break task cho tài liệu phần mềm (SRS, BRD, PRD, API Spec, mô tả dự án phần mềm, v.v.)
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           </div>
