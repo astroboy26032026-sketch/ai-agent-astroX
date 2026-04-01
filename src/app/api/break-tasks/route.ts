@@ -33,10 +33,10 @@ const taskSchema = z.object({
 })
 
 function resolveApiKey(provider: string, userKey: string): string {
-  if (userKey) return userKey
-  if (provider === 'mistral') return process.env.MISTRAL_API_KEY ?? ''
-  if (provider === 'anthropic') return process.env.ANTHROPIC_API_KEY ?? ''
-  if (provider === 'groq') return process.env.GROQ_API_KEY ?? ''
+  if (userKey) return userKey.trim()
+  if (provider === 'mistral') return (process.env.MISTRAL_API_KEY ?? '').trim()
+  if (provider === 'anthropic') return (process.env.ANTHROPIC_API_KEY ?? '').trim()
+  if (provider === 'groq') return (process.env.GROQ_API_KEY ?? '').trim()
   return ''
 }
 

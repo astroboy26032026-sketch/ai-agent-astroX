@@ -8,10 +8,10 @@ export const runtime = 'nodejs'
 export const maxDuration = 30
 
 function resolveApiKey(provider: string, userKey: string): string {
-  if (userKey) return userKey
-  if (provider === 'mistral') return process.env.MISTRAL_API_KEY ?? ''
-  if (provider === 'anthropic') return process.env.ANTHROPIC_API_KEY ?? ''
-  if (provider === 'groq') return process.env.GROQ_API_KEY ?? ''
+  if (userKey) return userKey.trim()
+  if (provider === 'mistral') return (process.env.MISTRAL_API_KEY ?? '').trim()
+  if (provider === 'anthropic') return (process.env.ANTHROPIC_API_KEY ?? '').trim()
+  if (provider === 'groq') return (process.env.GROQ_API_KEY ?? '').trim()
   return ''
 }
 
@@ -33,10 +33,12 @@ export async function POST(req: NextRequest) {
   else if (provider === 'groq') model = createGroq({ apiKey })(modelId)
   else model = createMistral({ apiKey })(modelId)
 
-  const { messages, documentContent, documentName } = await req.json()
+  const { messages, documentContent, documentName, ideaMode } = await req.json()
 
-  const systemPrompt = documentContent
-    ? `Bạn là AI phân tích tài liệu trong hệ thống AstroX. Người dùng hỏi về tài liệu "${documentName}".
+  let systemPrompt: string
+
+  if (documentContent) {
+    systemPrompt = `Bạn là AI phân tích tài liệu trong hệ thống AstroX. Người dùng hỏi về tài liệu "${documentName}".
 
 ## Quy tắc ngôn ngữ
 - Mặc định trả lời tiếng Việt
@@ -58,8 +60,37 @@ Khi user hỏi về "break down task", "phân tách công việc", hoặc yêu c
 ---
 ${documentContent.slice(0, 15000)}
 ---`
-    : `Bạn là AI hỗ trợ của AstroX. Chưa có tài liệu nào được tải lên. Hãy nhắc user tải lên file PDF hoặc Word để bắt đầu phân tích.`
+  } else if (ideaMode) {
+    systemPrompt = `Bạn là AI tư vấn dự án trong hệ thống AstroX. Người dùng chưa có tài liệu mà chỉ có ý tưởng.
 
-  const result = streamText({ model, system: systemPrompt, messages })
-  return result.toDataStreamResponse()
+## Quy tắc ngôn ngữ
+- Mặc định trả lời tiếng Việt
+- Nếu user hỏi tiếng Anh → trả lời tiếng Anh
+
+## Vai trò của bạn
+- Lắng nghe ý tưởng của người dùng và giúp họ phát triển thành kế hoạch cụ thể
+- Đặt câu hỏi để hiểu rõ hơn về ý tưởng (mục tiêu, đối tượng, tính năng chính, tech stack mong muốn)
+- Gợi ý kiến trúc hệ thống, tính năng cần thiết, và các bước triển khai
+- Khi đã hiểu đủ ý tưởng, đề xuất phân tách thành các task theo nhóm: DevOps, Backend, Frontend, QA
+- Gợi ý user sử dụng Task Board để quản lý các task
+
+## Phong cách
+- Thân thiện, chuyên nghiệp
+- Đưa ra gợi ý thực tế, cụ thể
+- Sử dụng bullet points và heading để dễ đọc
+- Hỏi thêm nếu cần thông tin để tư vấn chính xác hơn`
+  } else {
+    systemPrompt = `Bạn là AI hỗ trợ của AstroX. Chưa có tài liệu nào được tải lên. Hãy nhắc user tải lên file PDF hoặc Word để bắt đầu phân tích, hoặc chọn chế độ "Tôi có ý tưởng" nếu chưa có tài liệu.`
+  }
+
+  try {
+    const result = streamText({ model, system: systemPrompt, messages })
+    return result.toDataStreamResponse()
+  } catch (error) {
+    console.error('[document-chat] Error:', error)
+    return new Response(
+      JSON.stringify({ error: error instanceof Error ? error.message : 'Lỗi không xác định' }),
+      { status: 500, headers: { 'Content-Type': 'application/json' } }
+    )
+  }
 }
