@@ -2,17 +2,17 @@
 import { useChat } from '@ai-sdk/react';
 import Image from 'next/image';
 import { useSearchParams } from 'next/navigation';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 import ChatBottombar from '@/components/chat/chat-bottombar';
 import ChatLanding from '@/components/chat/chat-landing';
-import ChatMessageContent from '@/components/chat/chat-message-content';
 import { SimplifiedChatView } from '@/components/chat/simple-chat-view';
 import {
   ChatBubble,
   ChatBubbleMessage,
 } from '@/components/ui/chat/chat-bubble';
+import ChatMessageContent from '@/components/chat/chat-message-content';
 import WelcomeModal from '@/components/welcome-modal';
 import { Info } from 'lucide-react';
 import HelperBoost from './HelperBoost';
@@ -22,6 +22,7 @@ const Chat = () => {
   const initialQuery = searchParams.get('query');
   const [autoSubmitted, setAutoSubmitted] = useState(false);
   const [loadingSubmit, setLoadingSubmit] = useState(false);
+  const bottomRef = useRef<HTMLDivElement>(null);
 
   const {
     messages,
@@ -42,28 +43,6 @@ const Chat = () => {
     },
   });
 
-  const { currentAIMessage, latestUserMessage, hasActiveTool } = useMemo(() => {
-    const latestAIIdx = messages.findLastIndex((m) => m.role === 'assistant');
-    const latestUserIdx = messages.findLastIndex((m) => m.role === 'user');
-
-    const result = {
-      currentAIMessage: latestAIIdx !== -1 ? messages[latestAIIdx] : null,
-      latestUserMessage: latestUserIdx !== -1 ? messages[latestUserIdx] : null,
-      hasActiveTool: false,
-    };
-
-    if (result.currentAIMessage) {
-      result.hasActiveTool =
-        result.currentAIMessage.parts?.some(
-          (p) => p.type === 'tool-invocation' && p.toolInvocation?.state === 'result'
-        ) || false;
-    }
-
-    if (latestAIIdx < latestUserIdx) result.currentAIMessage = null;
-
-    return result;
-  }, [messages]);
-
   const isToolInProgress = messages.some(
     (m) =>
       m.role === 'assistant' &&
@@ -71,6 +50,8 @@ const Chat = () => {
         (p) => p.type === 'tool-invocation' && p.toolInvocation?.state !== 'result'
       )
   );
+
+  const hasMessages = messages.length > 0;
 
   const submitQuery = (query: string) => {
     if (!query.trim() || isToolInProgress) return;
@@ -87,6 +68,11 @@ const Chat = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialQuery, autoSubmitted]);
 
+  // Auto-scroll khi có tin nhắn mới
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
   const onSubmit = (e: { preventDefault?: () => void }) => {
     e.preventDefault?.();
     if (!input.trim() || isToolInProgress) return;
@@ -98,9 +84,6 @@ const Chat = () => {
     stop();
     setLoadingSubmit(false);
   };
-
-  const isEmptyState = !currentAIMessage && !latestUserMessage && !loadingSubmit;
-  const headerHeight = hasActiveTool ? 100 : 180;
 
   return (
     <div className="relative h-screen overflow-hidden">
@@ -116,9 +99,9 @@ const Chat = () => {
 
       {/* Fixed Avatar Header */}
       <div className="fixed top-0 right-0 left-0 z-50 bg-gradient-to-b from-black via-black/95 via-50% to-transparent">
-        <div className={`transition-all duration-300 ease-in-out ${hasActiveTool ? 'pt-6 pb-0' : 'py-6'}`}>
+        <div className={`transition-all duration-300 ease-in-out ${hasMessages ? 'pt-6 pb-0' : 'py-6'}`}>
           <div className="flex justify-center">
-            <div className={`transition-all duration-300 ${hasActiveTool ? 'h-20 w-20' : 'h-28 w-28'}`}>
+            <div className={`transition-all duration-300 ${hasMessages ? 'h-20 w-20' : 'h-28 w-28'}`}>
               <div
                 className="relative h-full w-full cursor-pointer overflow-hidden rounded-full"
                 onClick={() => (window.location.href = '/')}
@@ -134,45 +117,68 @@ const Chat = () => {
               </div>
             </div>
           </div>
-
-          {/* User message bubble in header — no AnimatePresence to avoid flicker */}
-          {latestUserMessage && !currentAIMessage && (
-            <div className="mx-auto flex max-w-4xl px-4 pt-2">
-              <ChatBubble variant="sent">
-                <ChatBubbleMessage>
-                  <ChatMessageContent
-                    message={latestUserMessage}
-                    isLast={true}
-                    isLoading={false}
-                    reload={() => Promise.resolve(null)}
-                  />
-                </ChatBubbleMessage>
-              </ChatBubble>
-            </div>
-          )}
         </div>
       </div>
 
-      {/* Main Content Area — wider max-w */}
+      {/* Main Content Area */}
       <div className="container mx-auto flex h-full max-w-4xl flex-col">
         <div
           className="flex-1 overflow-y-auto px-2"
-          style={{ paddingTop: `${headerHeight}px` }}
+          style={{ paddingTop: hasMessages ? '100px' : '180px' }}
         >
-          {isEmptyState ? (
+          {!hasMessages && !loadingSubmit ? (
             <div className="flex min-h-full items-center justify-center">
               <ChatLanding submitQuery={submitQuery} />
             </div>
-          ) : currentAIMessage ? (
-            <div className="pb-4">
-              <SimplifiedChatView
-                message={currentAIMessage}
-                isLoading={isLoading}
-                reload={reload}
-                addToolResult={addToolResult}
-              />
+          ) : (
+            <div className="flex flex-col gap-4 pb-4">
+              {messages.map((message, index) => {
+                const isLast = index === messages.length - 1;
+
+                if (message.role === 'user') {
+                  return (
+                    <div key={message.id} className="flex justify-end px-4">
+                      <ChatBubble variant="sent">
+                        <ChatBubbleMessage>
+                          <ChatMessageContent
+                            message={message}
+                            isLast={isLast}
+                            isLoading={false}
+                            reload={() => Promise.resolve(null)}
+                          />
+                        </ChatBubbleMessage>
+                      </ChatBubble>
+                    </div>
+                  );
+                }
+
+                if (message.role === 'assistant') {
+                  return (
+                    <div key={message.id}>
+                      <SimplifiedChatView
+                        message={message}
+                        isLoading={isLast && isLoading}
+                        reload={reload}
+                        addToolResult={addToolResult}
+                      />
+                    </div>
+                  );
+                }
+
+                return null;
+              })}
+
+              {/* Loading indicator khi chờ AI phản hồi */}
+              {isLoading && messages[messages.length - 1]?.role === 'user' && (
+                <div className="flex items-center gap-2 px-4 text-white/40">
+                  <div className="h-2 w-2 animate-pulse rounded-full bg-indigo-400" />
+                  <span className="text-xs">Đang suy nghĩ...</span>
+                </div>
+              )}
+
+              <div ref={bottomRef} />
             </div>
-          ) : null}
+          )}
         </div>
 
         <div className="sticky bottom-0 px-2 pt-3 md:px-0 md:pb-4 bg-black">
