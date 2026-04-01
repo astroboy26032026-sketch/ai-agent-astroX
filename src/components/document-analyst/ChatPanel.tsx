@@ -95,8 +95,32 @@ export default function ChatPanel({ selectedDoc }: ChatPanelProps) {
     return TASK_KEYWORDS.some((kw) => lower.includes(kw))
   }
 
+  // Gom toàn bộ nội dung chat thành text để gửi sang Task Board
+  const buildChatSummaryForTasks = () => {
+    return messages
+      .map((m) => (m.role === 'user' ? `[User]: ${m.content}` : `[AI]: ${m.content}`))
+      .join('\n\n')
+  }
+
+  const goToTaskBoard = () => {
+    try {
+      if (selectedDoc) {
+        sessionStorage.setItem('break_task_content', selectedDoc.content)
+        sessionStorage.setItem('break_task_docname', selectedDoc.name)
+      } else if (ideaMode && messages.length > 0) {
+        // Gom toàn bộ chat ý tưởng gửi sang task board
+        sessionStorage.setItem('break_task_content', buildChatSummaryForTasks())
+        sessionStorage.setItem('break_task_docname', 'Ý tưởng dự án')
+      }
+    } catch { /* ignore */ }
+    router.push('/todo-tasks?from=document')
+  }
+
   // Cho phép chat khi có tài liệu HOẶC đang ở idea mode
   const canChat = !!selectedDoc || ideaMode
+
+  // Hiện nút break task khi idea mode có ít nhất 1 response từ AI
+  const showIdeaBreakTask = ideaMode && !selectedDoc && messages.some((m) => m.role === 'assistant')
 
   return (
     <div className="flex h-full flex-col bg-black">
@@ -151,15 +175,7 @@ export default function ChatPanel({ selectedDoc }: ChatPanelProps) {
                     </button>
                   ))}
                   <button
-                    onClick={() => {
-                      if (selectedDoc) {
-                        try {
-                          sessionStorage.setItem('break_task_content', selectedDoc.content)
-                          sessionStorage.setItem('break_task_docname', selectedDoc.name)
-                        } catch { /* ignore */ }
-                      }
-                      router.push('/todo-tasks?from=document')
-                    }}
+                    onClick={goToTaskBoard}
                     className="flex items-center gap-1.5 rounded-full border border-indigo-500/40 bg-indigo-500/10 px-3 py-1.5 text-xs font-medium text-indigo-300 transition-colors hover:bg-indigo-500/20"
                   >
                     <LayoutGrid size={12} aria-hidden />
@@ -281,15 +297,7 @@ export default function ChatPanel({ selectedDoc }: ChatPanelProps) {
 
                 {msg.role === 'assistant' && shouldShowTaskButton(msg.content) && (
                   <button
-                    onClick={() => {
-                      if (selectedDoc) {
-                        try {
-                          sessionStorage.setItem('break_task_content', selectedDoc.content)
-                          sessionStorage.setItem('break_task_docname', selectedDoc.name)
-                        } catch { /* ignore */ }
-                      }
-                      router.push('/todo-tasks?from=document')
-                    }}
+                    onClick={goToTaskBoard}
                     className="mt-2 flex items-center gap-1.5 rounded-full border border-indigo-500/40 bg-indigo-500/10 px-3 py-1 text-xs font-medium text-indigo-300 transition-colors hover:bg-indigo-500/20"
                   >
                     <LayoutGrid size={11} aria-hidden />
@@ -315,6 +323,19 @@ export default function ChatPanel({ selectedDoc }: ChatPanelProps) {
 
         <div ref={bottomRef} />
       </div>
+
+      {/* Nút Break down task — hiện khi idea mode có response AI */}
+      {showIdeaBreakTask && (
+        <div className="border-t border-white/10 bg-white/[0.02] px-4 py-2.5">
+          <button
+            onClick={goToTaskBoard}
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-xs font-semibold text-white transition-all hover:bg-indigo-700"
+          >
+            <LayoutGrid size={14} />
+            Break down task từ ý tưởng
+          </button>
+        </div>
+      )}
 
       {/* Input gửi câu hỏi */}
       <div className="border-t border-white/10 bg-black px-4 py-3">
