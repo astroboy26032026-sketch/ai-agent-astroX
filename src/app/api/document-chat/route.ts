@@ -1,19 +1,9 @@
 import { streamText } from 'ai'
-import { createAnthropic } from '@ai-sdk/anthropic'
-import { createGroq } from '@ai-sdk/groq'
-import { createMistral } from '@ai-sdk/mistral'
 import { NextRequest } from 'next/server'
+import { resolveApiKey, createModel } from '@/lib/ai'
 
 export const runtime = 'nodejs'
 export const maxDuration = 30
-
-function resolveApiKey(provider: string, userKey: string): string {
-  if (userKey) return userKey.trim()
-  if (provider === 'mistral') return (process.env.MISTRAL_API_KEY ?? '').trim()
-  if (provider === 'anthropic') return (process.env.ANTHROPIC_API_KEY ?? '').trim()
-  if (provider === 'groq') return (process.env.GROQ_API_KEY ?? '').trim()
-  return ''
-}
 
 export async function POST(req: NextRequest) {
   const userKey = req.headers.get('x-api-key') || ''
@@ -28,11 +18,7 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  let model: ReturnType<ReturnType<typeof createMistral>>
-  if (provider === 'anthropic') model = createAnthropic({ apiKey })(modelId)
-  else if (provider === 'groq') model = createGroq({ apiKey })(modelId)
-  else model = createMistral({ apiKey })(modelId)
-
+  const model = createModel(provider, modelId, apiKey)
   const { messages, documentContent, documentName, ideaMode } = await req.json()
 
   let systemPrompt: string

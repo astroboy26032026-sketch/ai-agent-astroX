@@ -100,18 +100,26 @@ src/
 │   ├── page.tsx                  # Trang chủ
 │   ├── chat/                     # Trang chat AI portfolio
 │   ├── document-analyst/         # Trang AI Document Management
-│   ├── todo-tasks/               # Trang Kanban Task Board
+│   ├── todo-tasks/               # Trang Kanban Task Board (types, constants, components)
 │   └── api/
 │       ├── chat/                 # API chat portfolio (tools: getPresentation, getProjects, ...)
 │       ├── document-chat/        # API chat phân tích tài liệu
+│       ├── break-tasks/          # API break down tài liệu → task board
+│       ├── break-subtasks/       # API break task lớn → subtask nhỏ
+│       ├── extract-contact/      # API trích xuất thông tin liên hệ từ CV
 │       └── upload/               # API xử lý upload PDF/Word
 ├── components/
 │   ├── chat/                     # Components chat portfolio
 │   ├── document-analyst/         # Components Document Management
 │   ├── projects/                 # Carousel dự án
+│   ├── ModelSelectorBar.tsx      # Chọn AI provider/model
 │   └── ui/                       # UI primitives (Radix)
-└── hooks/
-    └── use-ai-settings.ts        # State management provider/model/apiKey
+├── hooks/
+│   └── use-ai-settings.ts        # State management provider/model/apiKey
+└── lib/
+    ├── ai.ts                     # Shared AI utility (resolveApiKey, createModel)
+    ├── types.ts                  # Shared TypeScript interfaces
+    └── utils.ts                  # Utility functions (cn)
 ```
 
 ---
