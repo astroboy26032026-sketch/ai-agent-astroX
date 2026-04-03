@@ -324,15 +324,16 @@ export default function ChatPanel({ selectedDoc }: ChatPanelProps) {
         <div ref={bottomRef} />
       </div>
 
-      {/* Nút Break down task — hiện khi idea mode có response AI */}
+      {/* Nút Break down task — hiện khi idea mode có response AI, disable khi đang loading */}
       {showIdeaBreakTask && (
         <div className="border-t border-white/10 bg-white/[0.02] px-4 py-2.5">
           <button
             onClick={goToTaskBoard}
-            className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-xs font-semibold text-white transition-all hover:bg-indigo-700"
+            disabled={isLoading}
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-xs font-semibold text-white transition-all hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <LayoutGrid size={14} />
-            Break down task từ ý tưởng
+            {isLoading ? 'Chờ AI trả lời xong...' : 'Break down task từ ý tưởng'}
           </button>
         </div>
       )}

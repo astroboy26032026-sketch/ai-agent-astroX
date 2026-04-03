@@ -2,8 +2,8 @@
 
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
-  ArrowLeft, Plus, Sparkles, Loader2, ChevronDown, ChevronUp,
-  GripVertical, Check, Clock, Circle, AlertCircle, Trash2,
+  ArrowLeft, Plus, Sparkles, Loader2, ChevronDown, ChevronUp, ChevronRight,
+  GripVertical, Check, Clock, Circle, AlertCircle, Trash2, Zap,
 } from 'lucide-react'
 import { useState, useEffect, Suspense, useRef } from 'react'
 import { useAISettings } from '@/hooks/use-ai-settings'
@@ -11,11 +11,19 @@ import { cn } from '@/lib/utils'
 
 /* ──────────────────────── Types ──────────────────────── */
 
+interface SubTask {
+  id: string
+  title: string
+  priority: 'high' | 'medium' | 'low'
+  status: 'todo' | 'in-progress' | 'done'
+}
+
 interface Task {
   id: string
   title: string
   priority: 'high' | 'medium' | 'low'
   status: 'todo' | 'in-progress' | 'done'
+  subtasks: SubTask[]
 }
 
 interface Column {
@@ -28,9 +36,9 @@ interface Column {
 /* ──────────────────────── Constants ──────────────────────── */
 
 const STATUS_CFG = {
-  'todo':        { label: 'Todo',       bg: '#c4c4c4', icon: Circle },
+  'todo':        { label: 'Todo',          bg: '#c4c4c4', icon: Circle },
   'in-progress': { label: 'Working on it', bg: '#fdab3d', icon: Clock },
-  'done':        { label: 'Done',       bg: '#00c875', icon: Check },
+  'done':        { label: 'Done',          bg: '#00c875', icon: Check },
 } as const
 
 const PRIORITY_CFG = {
@@ -40,10 +48,7 @@ const PRIORITY_CFG = {
 } as const
 
 const GROUP_ACCENTS: Record<string, string> = {
-  devops: '#fdab3d',
-  be:     '#579bfc',
-  fe:     '#a25ddc',
-  qa:     '#00c875',
+  devops: '#fdab3d', be: '#579bfc', fe: '#a25ddc', qa: '#00c875',
 }
 
 const EMPTY_COLUMNS: Column[] = [
@@ -64,8 +69,7 @@ function StatusPill({ status, onClick }: { status: Task['status']; onClick: () =
       className="flex items-center justify-center gap-1 rounded px-2.5 py-1 text-[11px] font-semibold text-white transition-opacity hover:opacity-80"
       style={{ backgroundColor: cfg.bg, minWidth: 100 }}
     >
-      <Icon size={11} />
-      {cfg.label}
+      <Icon size={11} />{cfg.label}
     </button>
   )
 }
@@ -86,22 +90,34 @@ function PriorityPill({ priority, onClick }: { priority: Task['priority']; onCli
 /* ──────────────────────── Group Table ──────────────────────── */
 
 function GroupTable({
-  column, onCycleStatus, onCyclePriority, onAddTask, onDeleteTask, collapsed, onToggle,
+  column, onCycleStatus, onCyclePriority, onAddTask, onDeleteTask,
+  onBreakSubtask, breakingTaskId,
+  onCycleSubStatus, onCycleSubPriority, onDeleteSubtask,
+  collapsed, onToggle,
 }: {
   column: Column
   onCycleStatus: (taskId: string) => void
   onCyclePriority: (taskId: string) => void
   onAddTask: (title: string) => void
   onDeleteTask: (taskId: string) => void
+  onBreakSubtask: (taskId: string) => void
+  breakingTaskId: string | null
+  onCycleSubStatus: (taskId: string, subId: string) => void
+  onCycleSubPriority: (taskId: string, subId: string) => void
+  onDeleteSubtask: (taskId: string, subId: string) => void
   collapsed: boolean
   onToggle: () => void
 }) {
   const [adding, setAdding] = useState(false)
   const [draft, setDraft] = useState('')
+  const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set())
   const inputRef = useRef<HTMLInputElement>(null)
 
-  const doneCount = column.tasks.filter((t) => t.status === 'done').length
-  const pct = column.tasks.length ? Math.round((doneCount / column.tasks.length) * 100) : 0
+  const allItems = column.tasks.reduce((n, t) => n + 1 + t.subtasks.length, 0)
+  const allDone = column.tasks.reduce(
+    (n, t) => n + (t.status === 'done' ? 1 : 0) + t.subtasks.filter((s) => s.status === 'done').length, 0,
+  )
+  const pct = allItems ? Math.round((allDone / allItems) * 100) : 0
 
   useEffect(() => { if (adding) inputRef.current?.focus() }, [adding])
 
@@ -111,26 +127,43 @@ function GroupTable({
     setAdding(false)
   }
 
+  const toggleExpand = (taskId: string) => {
+    setExpandedTasks((prev) => {
+      const next = new Set(prev)
+      next.has(taskId) ? next.delete(taskId) : next.add(taskId)
+      return next
+    })
+  }
+
+  // Auto-expand when subtasks arrive
+  useEffect(() => {
+    column.tasks.forEach((t) => {
+      if (t.subtasks.length > 0) {
+        setExpandedTasks((prev) => {
+          if (prev.has(t.id)) return prev
+          const next = new Set(prev)
+          next.add(t.id)
+          return next
+        })
+      }
+    })
+  }, [column.tasks])
+
+  const GRID = '1fr 110px 90px 70px 36px'
+
   return (
     <div className="mb-5 overflow-hidden rounded-lg" style={{ border: '1px solid rgba(255,255,255,.07)' }}>
-      {/* ── Group header ── */}
-      <div
-        className="flex items-center gap-3 px-4 py-2.5"
-        style={{ borderLeft: `4px solid ${column.accent}` }}
-      >
+      {/* Group header */}
+      <div className="flex items-center gap-3 px-4 py-2.5" style={{ borderLeft: `4px solid ${column.accent}` }}>
         <button onClick={onToggle} className="text-white/40 hover:text-white/70 transition-colors">
           {collapsed ? <ChevronDown size={15} /> : <ChevronUp size={15} />}
         </button>
         <span className="text-[13px] font-bold" style={{ color: column.accent }}>{column.title}</span>
         <span className="text-[11px] text-white/30">{column.tasks.length} tasks</span>
-
-        {column.tasks.length > 0 && (
+        {allItems > 0 && (
           <div className="ml-auto flex items-center gap-2">
             <div className="h-[5px] w-20 overflow-hidden rounded-full bg-white/10">
-              <div
-                className="h-full rounded-full transition-all duration-500"
-                style={{ width: `${pct}%`, backgroundColor: column.accent }}
-              />
+              <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, backgroundColor: column.accent }} />
             </div>
             <span className="text-[10px] font-semibold" style={{ color: column.accent }}>{pct}%</span>
           </div>
@@ -139,82 +172,163 @@ function GroupTable({
 
       {!collapsed && (
         <>
-          {/* ── Column headers row ── */}
+          {/* Column headers */}
           <div
             className="grid items-center border-t border-b text-[10px] font-semibold uppercase tracking-wider text-white/25 py-2 px-4"
-            style={{
-              gridTemplateColumns: '1fr 110px 90px 36px',
-              borderColor: 'rgba(255,255,255,.07)',
-              borderLeft: `4px solid ${column.accent}`,
-            }}
+            style={{ gridTemplateColumns: GRID, borderColor: 'rgba(255,255,255,.07)', borderLeft: `4px solid ${column.accent}` }}
           >
             <span>Task</span>
             <span className="text-center">Status</span>
             <span className="text-center">Priority</span>
+            <span className="text-center">Subtask</span>
             <span />
           </div>
 
-          {/* ── Rows ── */}
+          {/* Empty state */}
           {column.tasks.length === 0 && !adding && (
-            <div
-              className="py-8 text-center text-[11px] text-white/15"
-              style={{ borderLeft: `4px solid ${column.accent}` }}
-            >
+            <div className="py-8 text-center text-[11px] text-white/15" style={{ borderLeft: `4px solid ${column.accent}` }}>
               Chưa có task nào
             </div>
           )}
 
-          {column.tasks.map((task) => (
-            <div
-              key={task.id}
-              className={cn(
-                'group grid items-center py-2.5 px-4 transition-colors hover:bg-white/[0.025]',
-                task.status === 'done' && 'opacity-40',
-              )}
-              style={{
-                gridTemplateColumns: '1fr 110px 90px 36px',
-                borderLeft: `4px solid ${column.accent}`,
-                borderBottom: '1px solid rgba(255,255,255,.04)',
-              }}
-            >
-              {/* Title */}
-              <div className="flex items-center gap-2 min-w-0 pr-3">
-                <GripVertical size={12} className="shrink-0 text-white/0 group-hover:text-white/20 transition-colors cursor-grab" />
-                <span className={cn(
-                  'text-[13px] text-white/80 truncate',
-                  task.status === 'done' && 'line-through text-white/40',
-                )}>
-                  {task.title}
-                </span>
-              </div>
+          {/* Task rows */}
+          {column.tasks.map((task) => {
+            const isExpanded = expandedTasks.has(task.id)
+            const isBreaking = breakingTaskId === task.id
+            const hasSubs = task.subtasks.length > 0
+            const subDone = task.subtasks.filter((s) => s.status === 'done').length
 
-              {/* Status */}
-              <div className="flex justify-center">
-                <StatusPill status={task.status} onClick={() => onCycleStatus(task.id)} />
-              </div>
-
-              {/* Priority */}
-              <div className="flex justify-center">
-                <PriorityPill priority={task.priority} onClick={() => onCyclePriority(task.id)} />
-              </div>
-
-              {/* Delete */}
-              <div className="flex justify-center">
-                <button
-                  onClick={(e) => { e.stopPropagation(); onDeleteTask(task.id) }}
-                  className="text-transparent group-hover:text-white/20 hover:!text-red-400 transition-colors p-1"
+            return (
+              <div key={task.id}>
+                {/* Main task row */}
+                <div
+                  className={cn(
+                    'group grid items-center py-2.5 px-4 transition-colors hover:bg-white/[0.025]',
+                    task.status === 'done' && 'opacity-40',
+                  )}
+                  style={{
+                    gridTemplateColumns: GRID,
+                    borderLeft: `4px solid ${column.accent}`,
+                    borderBottom: '1px solid rgba(255,255,255,.04)',
+                  }}
                 >
-                  <Trash2 size={12} />
-                </button>
-              </div>
-            </div>
-          ))}
+                  {/* Title + expand toggle */}
+                  <div className="flex items-center gap-1.5 min-w-0 pr-3">
+                    {hasSubs ? (
+                      <button onClick={() => toggleExpand(task.id)} className="shrink-0 text-white/30 hover:text-white/60 transition-colors p-0.5">
+                        {isExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+                      </button>
+                    ) : (
+                      <GripVertical size={12} className="shrink-0 text-white/0 group-hover:text-white/20 transition-colors cursor-grab" />
+                    )}
+                    <span className={cn(
+                      'text-[13px] text-white/80 truncate',
+                      task.status === 'done' && 'line-through text-white/40',
+                    )}>
+                      {task.title}
+                    </span>
+                    {hasSubs && (
+                      <span className="ml-1.5 shrink-0 rounded-full bg-white/10 px-1.5 py-0.5 text-[9px] text-white/40 font-medium">
+                        {subDone}/{task.subtasks.length}
+                      </span>
+                    )}
+                  </div>
 
-          {/* ── Add task ── */}
+                  {/* Status */}
+                  <div className="flex justify-center">
+                    <StatusPill status={task.status} onClick={() => onCycleStatus(task.id)} />
+                  </div>
+
+                  {/* Priority */}
+                  <div className="flex justify-center">
+                    <PriorityPill priority={task.priority} onClick={() => onCyclePriority(task.id)} />
+                  </div>
+
+                  {/* Break subtask button */}
+                  <div className="flex justify-center">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onBreakSubtask(task.id) }}
+                      disabled={isBreaking}
+                      className={cn(
+                        'flex items-center gap-1 rounded px-2 py-1 text-[10px] font-semibold transition-all',
+                        isBreaking
+                          ? 'bg-[#6161ff]/20 text-[#6161ff]'
+                          : 'text-white/20 hover:text-[#6161ff] hover:bg-[#6161ff]/10',
+                      )}
+                    >
+                      {isBreaking ? <Loader2 size={10} className="animate-spin" /> : <Zap size={10} />}
+                      {isBreaking ? '...' : 'Break'}
+                    </button>
+                  </div>
+
+                  {/* Delete */}
+                  <div className="flex justify-center">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onDeleteTask(task.id) }}
+                      className="text-transparent group-hover:text-white/20 hover:!text-red-400 transition-colors p-1"
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Subtask rows */}
+                {isExpanded && task.subtasks.map((sub) => (
+                  <div
+                    key={sub.id}
+                    className={cn(
+                      'group grid items-center py-2 px-4 transition-colors hover:bg-white/[0.015]',
+                      sub.status === 'done' && 'opacity-40',
+                    )}
+                    style={{
+                      gridTemplateColumns: GRID,
+                      borderLeft: `4px solid ${column.accent}`,
+                      borderBottom: '1px solid rgba(255,255,255,.02)',
+                      backgroundColor: 'rgba(255,255,255,.01)',
+                    }}
+                  >
+                    {/* Subtask title — indented */}
+                    <div className="flex items-center gap-1.5 min-w-0 pr-3 pl-6">
+                      <div className="shrink-0 h-3 w-3 rounded-sm border border-white/15 flex items-center justify-center">
+                        {sub.status === 'done' && <Check size={8} className="text-[#00c875]" />}
+                      </div>
+                      <span className={cn(
+                        'text-[12px] text-white/60 truncate',
+                        sub.status === 'done' && 'line-through text-white/30',
+                      )}>
+                        {sub.title}
+                      </span>
+                    </div>
+
+                    <div className="flex justify-center">
+                      <StatusPill status={sub.status} onClick={() => onCycleSubStatus(task.id, sub.id)} />
+                    </div>
+
+                    <div className="flex justify-center">
+                      <PriorityPill priority={sub.priority} onClick={() => onCycleSubPriority(task.id, sub.id)} />
+                    </div>
+
+                    <div />
+
+                    <div className="flex justify-center">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); onDeleteSubtask(task.id, sub.id) }}
+                        className="text-transparent group-hover:text-white/20 hover:!text-red-400 transition-colors p-1"
+                      >
+                        <Trash2 size={11} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )
+          })}
+
+          {/* Add task */}
           {adding ? (
             <div
               className="grid items-center py-2 px-4 bg-white/[0.015]"
-              style={{ gridTemplateColumns: '1fr 110px 90px 36px', borderLeft: `4px solid ${column.accent}` }}
+              style={{ gridTemplateColumns: GRID, borderLeft: `4px solid ${column.accent}` }}
             >
               <div className="flex items-center gap-2 pr-3">
                 <Plus size={12} className="shrink-0 text-white/20" />
@@ -222,16 +336,13 @@ function GroupTable({
                   ref={inputRef}
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') commitAdd()
-                    if (e.key === 'Escape') { setAdding(false); setDraft('') }
-                  }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') commitAdd(); if (e.key === 'Escape') { setAdding(false); setDraft('') } }}
                   onBlur={commitAdd}
                   placeholder="Nhập tên task rồi Enter..."
                   className="w-full bg-transparent text-[13px] text-white outline-none placeholder:text-white/20"
                 />
               </div>
-              <div /><div /><div />
+              <div /><div /><div /><div />
             </div>
           ) : (
             <button
@@ -239,8 +350,7 @@ function GroupTable({
               className="flex w-full items-center gap-2 py-2.5 px-4 text-[12px] text-white/20 hover:text-white/50 hover:bg-white/[0.02] transition-colors"
               style={{ borderLeft: `4px solid ${column.accent}` }}
             >
-              <Plus size={13} />
-              Thêm task
+              <Plus size={13} /> Thêm task
             </button>
           )}
         </>
@@ -265,6 +375,7 @@ function TodoTasksContent() {
   const [aiError, setAiError] = useState<string | null>(null)
   const [showAiPanel, setShowAiPanel] = useState(true)
   const [notTechnical, setNotTechnical] = useState<{ reason: string; documentType: string } | null>(null)
+  const [breakingTaskId, setBreakingTaskId] = useState<string | null>(null)
 
   // Nhận tài liệu từ Document Analyst
   useEffect(() => {
@@ -280,7 +391,7 @@ function TodoTasksContent() {
     } catch { /* ignore */ }
   }, [searchParams])
 
-  /* ── AI generate ── */
+  /* ── AI generate tasks ── */
   const generateTasks = async () => {
     if (!aiInput.trim()) return
     setIsGenerating(true)
@@ -318,6 +429,7 @@ function TodoTasksContent() {
               title: t.title,
               priority: t.priority as Task['priority'],
               status: 'todo' as Task['status'],
+              subtasks: [],
             })),
           }
         }),
@@ -331,49 +443,126 @@ function TodoTasksContent() {
     }
   }
 
-  /* ── CRUD helpers ── */
+  /* ── AI break subtasks ── */
+  const breakSubtasks = async (colId: string, taskId: string) => {
+    const col = columns.find((c) => c.id === colId)
+    const task = col?.tasks.find((t) => t.id === taskId)
+    if (!task) return
+
+    setBreakingTaskId(taskId)
+    try {
+      const res = await fetch('/api/break-subtasks', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-provider': settings.provider,
+          'x-model': settings.modelId,
+          ...(settings.apiKey ? { 'x-api-key': settings.apiKey } : {}),
+        },
+        body: JSON.stringify({
+          taskTitle: task.title,
+          groupTitle: col?.title,
+          projectContext: aiInput || null,
+        }),
+      })
+
+      const data = await res.json()
+      if (!res.ok || !data.subtasks) return
+
+      setColumns((cols) =>
+        cols.map((c) =>
+          c.id !== colId ? c : {
+            ...c,
+            tasks: c.tasks.map((t) =>
+              t.id !== taskId ? t : {
+                ...t,
+                subtasks: data.subtasks.map((s: { title: string; priority: string }, i: number) => ({
+                  id: `${taskId}-sub-${Date.now()}-${i}`,
+                  title: s.title,
+                  priority: s.priority as SubTask['priority'],
+                  status: 'todo' as SubTask['status'],
+                })),
+              },
+            ),
+          },
+        ),
+      )
+    } catch { /* ignore */ }
+    finally { setBreakingTaskId(null) }
+  }
+
+  /* ── CRUD: tasks ── */
   const cycleStatus = (colId: string, taskId: string) => {
     const order: Task['status'][] = ['todo', 'in-progress', 'done']
     setColumns((cols) =>
-      cols.map((c) =>
-        c.id !== colId ? c : {
-          ...c,
-          tasks: c.tasks.map((t) =>
-            t.id !== taskId ? t : { ...t, status: order[(order.indexOf(t.status) + 1) % 3] },
-          ),
-        },
-      ),
+      cols.map((c) => c.id !== colId ? c : {
+        ...c,
+        tasks: c.tasks.map((t) => t.id !== taskId ? t : { ...t, status: order[(order.indexOf(t.status) + 1) % 3] }),
+      }),
     )
   }
 
   const cyclePriority = (colId: string, taskId: string) => {
     const order: Task['priority'][] = ['low', 'medium', 'high']
     setColumns((cols) =>
-      cols.map((c) =>
-        c.id !== colId ? c : {
-          ...c,
-          tasks: c.tasks.map((t) =>
-            t.id !== taskId ? t : { ...t, priority: order[(order.indexOf(t.priority) + 1) % 3] },
-          ),
-        },
-      ),
+      cols.map((c) => c.id !== colId ? c : {
+        ...c,
+        tasks: c.tasks.map((t) => t.id !== taskId ? t : { ...t, priority: order[(order.indexOf(t.priority) + 1) % 3] }),
+      }),
     )
   }
 
   const addTask = (colId: string, title: string) => {
     setColumns((cols) =>
-      cols.map((c) =>
-        c.id !== colId ? c : {
-          ...c,
-          tasks: [...c.tasks, { id: Math.random().toString(36).slice(2), title, priority: 'medium' as const, status: 'todo' as const }],
-        },
-      ),
+      cols.map((c) => c.id !== colId ? c : {
+        ...c,
+        tasks: [...c.tasks, { id: Math.random().toString(36).slice(2), title, priority: 'medium' as const, status: 'todo' as const, subtasks: [] }],
+      }),
     )
   }
 
   const deleteTask = (colId: string, taskId: string) => {
     setColumns((cols) =>
       cols.map((c) => c.id !== colId ? c : { ...c, tasks: c.tasks.filter((t) => t.id !== taskId) }),
+    )
+  }
+
+  /* ── CRUD: subtasks ── */
+  const cycleSubStatus = (colId: string, taskId: string, subId: string) => {
+    const order: SubTask['status'][] = ['todo', 'in-progress', 'done']
+    setColumns((cols) =>
+      cols.map((c) => c.id !== colId ? c : {
+        ...c,
+        tasks: c.tasks.map((t) => t.id !== taskId ? t : {
+          ...t,
+          subtasks: t.subtasks.map((s) => s.id !== subId ? s : { ...s, status: order[(order.indexOf(s.status) + 1) % 3] }),
+        }),
+      }),
+    )
+  }
+
+  const cycleSubPriority = (colId: string, taskId: string, subId: string) => {
+    const order: SubTask['priority'][] = ['low', 'medium', 'high']
+    setColumns((cols) =>
+      cols.map((c) => c.id !== colId ? c : {
+        ...c,
+        tasks: c.tasks.map((t) => t.id !== taskId ? t : {
+          ...t,
+          subtasks: t.subtasks.map((s) => s.id !== subId ? s : { ...s, priority: order[(order.indexOf(s.priority) + 1) % 3] }),
+        }),
+      }),
+    )
+  }
+
+  const deleteSubtask = (colId: string, taskId: string, subId: string) => {
+    setColumns((cols) =>
+      cols.map((c) => c.id !== colId ? c : {
+        ...c,
+        tasks: c.tasks.map((t) => t.id !== taskId ? t : {
+          ...t,
+          subtasks: t.subtasks.filter((s) => s.id !== subId),
+        }),
+      }),
     )
   }
 
@@ -393,12 +582,9 @@ function TodoTasksContent() {
   /* ──────────────────────── Render ──────────────────────── */
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-[#181b34]">
-      {/* ── Top bar ── */}
+      {/* Top bar */}
       <div className="flex items-center gap-4 border-b border-white/10 px-6 py-3">
-        <button
-          onClick={() => router.push('/document-analyst')}
-          className="flex items-center gap-2 text-white/50 hover:text-white transition-colors"
-        >
+        <button onClick={() => router.push('/document-analyst')} className="flex items-center gap-2 text-white/50 hover:text-white transition-colors">
           <ArrowLeft size={15} />
           <span className="text-xs font-medium">Quay lại</span>
         </button>
@@ -421,22 +607,20 @@ function TodoTasksContent() {
               onClick={() => { setColumns(EMPTY_COLUMNS); setShowAiPanel(true) }}
               className="flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-[11px] text-white/40 hover:text-red-400 hover:border-red-500/30 transition-colors"
             >
-              <Trash2 size={11} />
-              Clear
+              <Trash2 size={11} /> Clear
             </button>
           )}
           <button
             onClick={() => setShowAiPanel(!showAiPanel)}
             className="flex items-center gap-1.5 rounded-lg bg-[#6161ff] px-4 py-1.5 text-[11px] font-semibold text-white transition-colors hover:bg-[#5050ee]"
           >
-            <Sparkles size={12} />
-            AI Break Task
+            <Sparkles size={12} /> AI Break Task
             {showAiPanel ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
           </button>
         </div>
       </div>
 
-      {/* ── AI Panel ── */}
+      {/* AI Panel */}
       {showAiPanel && (
         <div className="border-b border-white/10 bg-[#1e2140] px-6 py-4">
           <div className="mx-auto max-w-3xl">
@@ -472,13 +656,10 @@ function TodoTasksContent() {
                     </span>
                   )}
                 </div>
-
                 {notTechnical && (
                   <div className="mt-3 rounded-xl border border-[#fdab3d]/30 bg-[#fdab3d]/10 px-4 py-3">
                     <p className="text-xs font-semibold text-[#fdab3d]">Không phải tài liệu kỹ thuật phần mềm</p>
-                    <p className="mt-1 text-[11px] text-[#fdab3d]/70">
-                      <b>Loại:</b> {notTechnical.documentType}
-                    </p>
+                    <p className="mt-1 text-[11px] text-[#fdab3d]/70"><b>Loại:</b> {notTechnical.documentType}</p>
                     <p className="mt-0.5 text-[11px] text-[#fdab3d]/70">{notTechnical.reason}</p>
                   </div>
                 )}
@@ -488,7 +669,7 @@ function TodoTasksContent() {
         </div>
       )}
 
-      {/* ── Board ── */}
+      {/* Board */}
       <div className="flex-1 overflow-y-auto px-6 py-5">
         <div className="mx-auto max-w-5xl">
           {columns.map((col) => (
@@ -499,6 +680,11 @@ function TodoTasksContent() {
               onCyclePriority={(tid) => cyclePriority(col.id, tid)}
               onAddTask={(title) => addTask(col.id, title)}
               onDeleteTask={(tid) => deleteTask(col.id, tid)}
+              onBreakSubtask={(tid) => breakSubtasks(col.id, tid)}
+              breakingTaskId={breakingTaskId}
+              onCycleSubStatus={(tid, sid) => cycleSubStatus(col.id, tid, sid)}
+              onCycleSubPriority={(tid, sid) => cycleSubPriority(col.id, tid, sid)}
+              onDeleteSubtask={(tid, sid) => deleteSubtask(col.id, tid, sid)}
               collapsed={collapsedGroups.has(col.id)}
               onToggle={() => toggleGroup(col.id)}
             />
@@ -509,10 +695,7 @@ function TodoTasksContent() {
               <div className="mb-4 rounded-2xl bg-white/5 p-6"><Sparkles size={32} className="text-[#6161ff]/40" /></div>
               <p className="text-sm font-medium text-white/40">Chưa có task nào</p>
               <p className="mt-1 text-xs text-white/20">Dùng AI Break Task để tạo tự động</p>
-              <button
-                onClick={() => setShowAiPanel(true)}
-                className="mt-4 rounded-lg bg-[#6161ff] px-5 py-2 text-xs font-semibold text-white hover:bg-[#5050ee] transition-colors"
-              >
+              <button onClick={() => setShowAiPanel(true)} className="mt-4 rounded-lg bg-[#6161ff] px-5 py-2 text-xs font-semibold text-white hover:bg-[#5050ee] transition-colors">
                 Mở AI Break Task
               </button>
             </div>
@@ -520,17 +703,15 @@ function TodoTasksContent() {
         </div>
       </div>
 
-      {/* ── Footer ── */}
+      {/* Footer */}
       <div className="border-t border-white/[0.05] px-6 py-2">
         <p className="text-center text-[10px] text-white/15">
-          Click Status / Priority để thay đổi · Hover để xoá task · AI Break Task tạo task tự động
+          Click Status / Priority để thay đổi · Nút Break để tách subtask · Hover để xoá
         </p>
       </div>
     </div>
   )
 }
-
-/* ──────────────────────── Export ──────────────────────── */
 
 export default function TodoTasksPage() {
   return (
