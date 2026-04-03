@@ -16,6 +16,7 @@ interface SubTask {
   title: string
   priority: 'high' | 'medium' | 'low'
   status: 'todo' | 'in-progress' | 'done'
+  assignee: string
 }
 
 interface Task {
@@ -23,7 +24,19 @@ interface Task {
   title: string
   priority: 'high' | 'medium' | 'low'
   status: 'todo' | 'in-progress' | 'done'
+  assignee: string
   subtasks: SubTask[]
+}
+
+const ASSIGNEE_COLORS = [
+  '#7c5cfc', '#e2445c', '#00c875', '#fdab3d', '#579bfc',
+  '#ff642e', '#cab641', '#ff5ac4', '#66ccff', '#9cd326',
+]
+
+function getAvatarColor(name: string) {
+  let hash = 0
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash)
+  return ASSIGNEE_COLORS[Math.abs(hash) % ASSIGNEE_COLORS.length]
 }
 
 interface Column {
@@ -87,12 +100,66 @@ function PriorityPill({ priority, onClick }: { priority: Task['priority']; onCli
   )
 }
 
+function AssigneeCell({ assignee, onChange }: { assignee: string; onChange: (name: string) => void }) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(assignee)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => { if (editing) inputRef.current?.focus() }, [editing])
+
+  const commit = () => {
+    onChange(draft.trim())
+    setEditing(false)
+  }
+
+  if (editing) {
+    return (
+      <input
+        ref={inputRef}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') { setDraft(assignee); setEditing(false) } }}
+        onBlur={commit}
+        placeholder="Tên..."
+        className="w-full max-w-[80px] rounded bg-white/10 px-2 py-0.5 text-[11px] text-white outline-none placeholder:text-white/25 text-center"
+        onClick={(e) => e.stopPropagation()}
+      />
+    )
+  }
+
+  if (!assignee) {
+    return (
+      <button
+        onClick={(e) => { e.stopPropagation(); setDraft(''); setEditing(true) }}
+        className="flex h-6 w-6 items-center justify-center rounded-full border border-dashed border-white/15 text-white/15 hover:border-white/30 hover:text-white/30 transition-colors"
+      >
+        <Plus size={10} />
+      </button>
+    )
+  }
+
+  const color = getAvatarColor(assignee)
+  const initials = assignee.split(' ').map((w) => w[0]).join('').toUpperCase().slice(0, 2)
+
+  return (
+    <button
+      onClick={(e) => { e.stopPropagation(); setDraft(assignee); setEditing(true) }}
+      title={assignee}
+      className="flex h-6 min-w-[24px] items-center justify-center rounded-full px-1 text-[10px] font-bold text-white transition-opacity hover:opacity-80"
+      style={{ backgroundColor: color }}
+    >
+      {initials}
+    </button>
+  )
+}
+
 /* ──────────────────────── Group Table ──────────────────────── */
 
 function GroupTable({
   column, onCycleStatus, onCyclePriority, onAddTask, onDeleteTask,
   onBreakSubtask, breakingTaskId,
   onCycleSubStatus, onCycleSubPriority, onDeleteSubtask,
+  onAssign, onSubAssign,
   collapsed, onToggle,
 }: {
   column: Column
@@ -105,6 +172,8 @@ function GroupTable({
   onCycleSubStatus: (taskId: string, subId: string) => void
   onCycleSubPriority: (taskId: string, subId: string) => void
   onDeleteSubtask: (taskId: string, subId: string) => void
+  onAssign: (taskId: string, name: string) => void
+  onSubAssign: (taskId: string, subId: string, name: string) => void
   collapsed: boolean
   onToggle: () => void
 }) {
@@ -149,17 +218,17 @@ function GroupTable({
     })
   }, [column.tasks])
 
-  const GRID = '1fr 110px 90px 70px 36px'
+  const GRID = '1fr 110px 90px 50px 70px 36px'
 
   return (
-    <div className="mb-5 overflow-hidden rounded-lg" style={{ border: '1px solid rgba(255,255,255,.07)' }}>
+    <div className="mb-5 overflow-hidden rounded-lg" style={{ border: '1px solid rgba(255,255,255,.1)' }}>
       {/* Group header */}
-      <div className="flex items-center gap-3 px-4 py-2.5" style={{ borderLeft: `4px solid ${column.accent}` }}>
-        <button onClick={onToggle} className="text-white/40 hover:text-white/70 transition-colors">
+      <div className="flex items-center gap-3 px-4 py-2.5 bg-white/[0.02]" style={{ borderLeft: `4px solid ${column.accent}` }}>
+        <button onClick={onToggle} className="text-white/50 hover:text-white/80 transition-colors">
           {collapsed ? <ChevronDown size={15} /> : <ChevronUp size={15} />}
         </button>
         <span className="text-[13px] font-bold" style={{ color: column.accent }}>{column.title}</span>
-        <span className="text-[11px] text-white/30">{column.tasks.length} tasks</span>
+        <span className="text-[11px] text-white/40">{column.tasks.length} tasks</span>
         {allItems > 0 && (
           <div className="ml-auto flex items-center gap-2">
             <div className="h-[5px] w-20 overflow-hidden rounded-full bg-white/10">
@@ -174,12 +243,13 @@ function GroupTable({
         <>
           {/* Column headers */}
           <div
-            className="grid items-center border-t border-b text-[10px] font-semibold uppercase tracking-wider text-white/25 py-2 px-4"
-            style={{ gridTemplateColumns: GRID, borderColor: 'rgba(255,255,255,.07)', borderLeft: `4px solid ${column.accent}` }}
+            className="grid items-center border-t border-b text-[10px] font-semibold uppercase tracking-wider text-white/35 py-2 px-4"
+            style={{ gridTemplateColumns: GRID, borderColor: 'rgba(255,255,255,.08)', borderLeft: `4px solid ${column.accent}` }}
           >
             <span>Task</span>
             <span className="text-center">Status</span>
             <span className="text-center">Priority</span>
+            <span className="text-center">Assign</span>
             <span className="text-center">Subtask</span>
             <span />
           </div>
@@ -203,32 +273,32 @@ function GroupTable({
                 {/* Main task row */}
                 <div
                   className={cn(
-                    'group grid items-center py-2.5 px-4 transition-colors hover:bg-white/[0.025]',
-                    task.status === 'done' && 'opacity-40',
+                    'group grid items-center py-2.5 px-4 transition-colors hover:bg-white/[0.03]',
+                    task.status === 'done' && 'opacity-50',
                   )}
                   style={{
                     gridTemplateColumns: GRID,
                     borderLeft: `4px solid ${column.accent}`,
-                    borderBottom: '1px solid rgba(255,255,255,.04)',
+                    borderBottom: '1px solid rgba(255,255,255,.06)',
                   }}
                 >
                   {/* Title + expand toggle */}
                   <div className="flex items-center gap-1.5 min-w-0 pr-3">
                     {hasSubs ? (
-                      <button onClick={() => toggleExpand(task.id)} className="shrink-0 text-white/30 hover:text-white/60 transition-colors p-0.5">
+                      <button onClick={() => toggleExpand(task.id)} className="shrink-0 text-white/40 hover:text-white/70 transition-colors p-0.5">
                         {isExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
                       </button>
                     ) : (
-                      <GripVertical size={12} className="shrink-0 text-white/0 group-hover:text-white/20 transition-colors cursor-grab" />
+                      <GripVertical size={12} className="shrink-0 text-white/0 group-hover:text-white/25 transition-colors cursor-grab" />
                     )}
                     <span className={cn(
-                      'text-[13px] text-white/80 truncate',
-                      task.status === 'done' && 'line-through text-white/40',
+                      'text-[13px] text-white font-medium truncate',
+                      task.status === 'done' && 'line-through text-white/50',
                     )}>
                       {task.title}
                     </span>
                     {hasSubs && (
-                      <span className="ml-1.5 shrink-0 rounded-full bg-white/10 px-1.5 py-0.5 text-[9px] text-white/40 font-medium">
+                      <span className="ml-1.5 shrink-0 rounded-full bg-white/10 px-1.5 py-0.5 text-[9px] text-white/50 font-medium">
                         {subDone}/{task.subtasks.length}
                       </span>
                     )}
@@ -244,6 +314,11 @@ function GroupTable({
                     <PriorityPill priority={task.priority} onClick={() => onCyclePriority(task.id)} />
                   </div>
 
+                  {/* Assign */}
+                  <div className="flex justify-center">
+                    <AssigneeCell assignee={task.assignee} onChange={(name) => onAssign(task.id, name)} />
+                  </div>
+
                   {/* Break subtask button */}
                   <div className="flex justify-center">
                     <button
@@ -253,7 +328,7 @@ function GroupTable({
                         'flex items-center gap-1 rounded px-2 py-1 text-[10px] font-semibold transition-all',
                         isBreaking
                           ? 'bg-[#6161ff]/20 text-[#6161ff]'
-                          : 'text-white/20 hover:text-[#6161ff] hover:bg-[#6161ff]/10',
+                          : 'text-white/30 hover:text-[#6161ff] hover:bg-[#6161ff]/10',
                       )}
                     >
                       {isBreaking ? <Loader2 size={10} className="animate-spin" /> : <Zap size={10} />}
@@ -265,7 +340,7 @@ function GroupTable({
                   <div className="flex justify-center">
                     <button
                       onClick={(e) => { e.stopPropagation(); onDeleteTask(task.id) }}
-                      className="text-transparent group-hover:text-white/20 hover:!text-red-400 transition-colors p-1"
+                      className="text-transparent group-hover:text-white/25 hover:!text-red-400 transition-colors p-1"
                     >
                       <Trash2 size={12} />
                     </button>
@@ -308,6 +383,10 @@ function GroupTable({
                       <PriorityPill priority={sub.priority} onClick={() => onCycleSubPriority(task.id, sub.id)} />
                     </div>
 
+                    <div className="flex justify-center">
+                      <AssigneeCell assignee={sub.assignee} onChange={(name) => onSubAssign(task.id, sub.id, name)} />
+                    </div>
+
                     <div />
 
                     <div className="flex justify-center">
@@ -342,7 +421,7 @@ function GroupTable({
                   className="w-full bg-transparent text-[13px] text-white outline-none placeholder:text-white/20"
                 />
               </div>
-              <div /><div /><div /><div />
+              <div /><div /><div /><div /><div />
             </div>
           ) : (
             <button
@@ -429,6 +508,7 @@ function TodoTasksContent() {
               title: t.title,
               priority: t.priority as Task['priority'],
               status: 'todo' as Task['status'],
+              assignee: '',
               subtasks: [],
             })),
           }
@@ -481,6 +561,7 @@ function TodoTasksContent() {
                   title: s.title,
                   priority: s.priority as SubTask['priority'],
                   status: 'todo' as SubTask['status'],
+                  assignee: '',
                 })),
               },
             ),
@@ -516,7 +597,7 @@ function TodoTasksContent() {
     setColumns((cols) =>
       cols.map((c) => c.id !== colId ? c : {
         ...c,
-        tasks: [...c.tasks, { id: Math.random().toString(36).slice(2), title, priority: 'medium' as const, status: 'todo' as const, subtasks: [] }],
+        tasks: [...c.tasks, { id: Math.random().toString(36).slice(2), title, priority: 'medium' as const, status: 'todo' as const, assignee: '', subtasks: [] }],
       }),
     )
   }
@@ -561,6 +642,27 @@ function TodoTasksContent() {
         tasks: c.tasks.map((t) => t.id !== taskId ? t : {
           ...t,
           subtasks: t.subtasks.filter((s) => s.id !== subId),
+        }),
+      }),
+    )
+  }
+
+  const assignTask = (colId: string, taskId: string, name: string) => {
+    setColumns((cols) =>
+      cols.map((c) => c.id !== colId ? c : {
+        ...c,
+        tasks: c.tasks.map((t) => t.id !== taskId ? t : { ...t, assignee: name }),
+      }),
+    )
+  }
+
+  const assignSubtask = (colId: string, taskId: string, subId: string, name: string) => {
+    setColumns((cols) =>
+      cols.map((c) => c.id !== colId ? c : {
+        ...c,
+        tasks: c.tasks.map((t) => t.id !== taskId ? t : {
+          ...t,
+          subtasks: t.subtasks.map((s) => s.id !== subId ? s : { ...s, assignee: name }),
         }),
       }),
     )
@@ -685,6 +787,8 @@ function TodoTasksContent() {
               onCycleSubStatus={(tid, sid) => cycleSubStatus(col.id, tid, sid)}
               onCycleSubPriority={(tid, sid) => cycleSubPriority(col.id, tid, sid)}
               onDeleteSubtask={(tid, sid) => deleteSubtask(col.id, tid, sid)}
+              onAssign={(tid, name) => assignTask(col.id, tid, name)}
+              onSubAssign={(tid, sid, name) => assignSubtask(col.id, tid, sid, name)}
               collapsed={collapsedGroups.has(col.id)}
               onToggle={() => toggleGroup(col.id)}
             />
