@@ -9,7 +9,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useChat } from '@ai-sdk/react'
-import { Send, Bot, User, Loader2, FileText, LayoutGrid, Lightbulb, Upload } from 'lucide-react'
+import { Send, Bot, User, Loader2, FileText, LayoutGrid, Lightbulb, Upload, FlaskConical } from 'lucide-react'
 import { toast } from 'sonner'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -116,6 +116,19 @@ export default function ChatPanel({ selectedDoc }: ChatPanelProps) {
     router.push('/todo-tasks?from=document')
   }
 
+  const goToTestCase = () => {
+    try {
+      if (selectedDoc) {
+        sessionStorage.setItem('test_case_content', selectedDoc.content)
+        sessionStorage.setItem('test_case_docname', selectedDoc.name)
+      } else if (ideaMode && messages.length > 0) {
+        sessionStorage.setItem('test_case_content', buildChatSummaryForTasks())
+        sessionStorage.setItem('test_case_docname', 'Ý tưởng dự án')
+      }
+    } catch { /* ignore */ }
+    router.push('/test-case?from=document')
+  }
+
   // Cho phép chat khi có tài liệu HOẶC đang ở idea mode
   const canChat = !!selectedDoc || ideaMode
 
@@ -180,6 +193,13 @@ export default function ChatPanel({ selectedDoc }: ChatPanelProps) {
                   >
                     <LayoutGrid size={12} aria-hidden />
                     Break down task
+                  </button>
+                  <button
+                    onClick={goToTestCase}
+                    className="flex items-center gap-1.5 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-300 transition-colors hover:bg-emerald-500/20"
+                  >
+                    <FlaskConical size={12} aria-hidden />
+                    Sinh test case
                   </button>
                 </div>
               </>
@@ -324,16 +344,24 @@ export default function ChatPanel({ selectedDoc }: ChatPanelProps) {
         <div ref={bottomRef} />
       </div>
 
-      {/* Nút Break down task — hiện khi idea mode có response AI, disable khi đang loading */}
+      {/* Nút Break down task + Test case — hiện khi idea mode có response AI */}
       {showIdeaBreakTask && (
-        <div className="border-t border-white/10 bg-white/[0.02] px-4 py-2.5">
+        <div className="flex gap-2 border-t border-white/10 bg-white/[0.02] px-4 py-2.5">
           <button
             onClick={goToTaskBoard}
             disabled={isLoading}
-            className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-xs font-semibold text-white transition-all hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-xs font-semibold text-white transition-all hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <LayoutGrid size={14} />
-            {isLoading ? 'Chờ AI trả lời xong...' : 'Break down task từ ý tưởng'}
+            {isLoading ? 'Chờ AI...' : 'Break down task'}
+          </button>
+          <button
+            onClick={goToTestCase}
+            disabled={isLoading}
+            className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-semibold text-white transition-all hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <FlaskConical size={14} />
+            {isLoading ? 'Chờ AI...' : 'Sinh test case'}
           </button>
         </div>
       )}

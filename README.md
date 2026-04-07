@@ -26,8 +26,8 @@
 | Module | Trạng thái | Mô tả |
 |--------|-----------|-------|
 | **AI Document Management** | 🟢 In Progress (30%) | Upload PDF/Word → Q&A với AI, break down task thành Kanban board |
+| **AI Test Case Generator** | 🟢 In Progress (40%) | Mô tả tính năng → sinh bộ test case đầy đủ, export CSV |
 | **AI Document Swagger** | ⏳ Planned | Parse tài liệu → sinh OpenAPI/Swagger spec tự động |
-| **AI Document Test Case** | ⏳ Planned | Parse tài liệu → sinh bộ test case đầy đủ |
 
 ---
 
@@ -36,6 +36,7 @@
 - 🤖 **Chat AI** — Hỏi đáp về platform AstroX, xem dự án, tiến độ, liên hệ
 - 📄 **AI Document Management** — Upload PDF/Word, streaming Q&A, phân tích nội dung
 - 📋 **Task Board (Kanban)** — Break down tài liệu phần mềm thành task theo DevOps/BE/FE/QA
+- 🧪 **AI Test Case Generator** — Sinh bộ test case đầy đủ (functional, edge-case, negative, performance, security), export CSV
 - 🔌 **Multi-provider** — Hỗ trợ Mistral AI (mặc định), Groq (miễn phí), Anthropic
 - 🌑 **Dark mode only** — Giao diện tối hoàn toàn
 
@@ -101,11 +102,13 @@ src/
 │   ├── chat/                     # Trang chat AI portfolio
 │   ├── document-analyst/         # Trang AI Document Management
 │   ├── todo-tasks/               # Trang Kanban Task Board (types, constants, components)
+│   ├── test-case/                # Trang AI Test Case Generator (types, constants, components)
 │   └── api/
 │       ├── chat/                 # API chat portfolio (tools: getPresentation, getProjects, ...)
 │       ├── document-chat/        # API chat phân tích tài liệu
 │       ├── break-tasks/          # API break down tài liệu → task board
 │       ├── break-subtasks/       # API break task lớn → subtask nhỏ
+│       ├── generate-test-cases/  # API sinh bộ test case từ mô tả/tài liệu
 │       ├── extract-contact/      # API trích xuất thông tin liên hệ từ CV
 │       └── upload/               # API xử lý upload PDF/Word
 ├── components/
@@ -130,7 +133,7 @@ src/
 - [x] Task Board Kanban mẫu
 - [x] Multi-provider AI (Mistral / Groq / Anthropic)
 - [ ] AI Document Swagger — sinh OpenAPI spec
-- [ ] AI Document Test Case — sinh test case
+- [x] AI Test Case Generator — sinh test case từ tài liệu/ý tưởng
 - [ ] Drag & drop Kanban board
 - [ ] Lưu task board vào database
 

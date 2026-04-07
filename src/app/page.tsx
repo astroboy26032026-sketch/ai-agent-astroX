@@ -8,6 +8,7 @@ import {
   Layers,
   UserRoundSearch,
   FileSearch,
+  FlaskConical,
   Smile,
 } from 'lucide-react';
 import Image from 'next/image';
@@ -204,19 +205,35 @@ export default function Home() {
           <p className="mb-3 text-center text-[11px] font-semibold uppercase tracking-widest text-white/30">
             AI Tools
           </p>
-          <button
-            onClick={() => router.push('/document-analyst')}
-            className="group flex w-full items-center gap-4 rounded-2xl border border-white/10 bg-white/5 px-5 py-4 shadow-sm backdrop-blur-lg transition-all hover:border-indigo-500/40 hover:bg-white/10"
-          >
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 shadow">
-              <FileSearch size={20} className="text-white" />
-            </div>
-            <div className="text-left">
-              <p className="text-sm font-semibold text-white">AI Document Management</p>
-              <p className="text-xs text-white/40">Upload PDF/Word → phân tích & quản lý tài liệu</p>
-            </div>
-            <ArrowRight size={16} className="ml-auto text-white/30 transition-colors group-hover:text-indigo-400" />
-          </button>
+          <div className="flex flex-col gap-3">
+            <button
+              onClick={() => router.push('/document-analyst')}
+              className="group flex w-full items-center gap-4 rounded-2xl border border-white/10 bg-white/5 px-5 py-4 shadow-sm backdrop-blur-lg transition-all hover:border-indigo-500/40 hover:bg-white/10"
+            >
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 shadow">
+                <FileSearch size={20} className="text-white" />
+              </div>
+              <div className="text-left">
+                <p className="text-sm font-semibold text-white">AI Document Management</p>
+                <p className="text-xs text-white/40">Upload PDF/Word → phân tích & quản lý tài liệu</p>
+              </div>
+              <ArrowRight size={16} className="ml-auto text-white/30 transition-colors group-hover:text-indigo-400" />
+            </button>
+
+            <button
+              onClick={() => router.push('/test-case')}
+              className="group flex w-full items-center gap-4 rounded-2xl border border-white/10 bg-white/5 px-5 py-4 shadow-sm backdrop-blur-lg transition-all hover:border-emerald-500/40 hover:bg-white/10"
+            >
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 shadow">
+                <FlaskConical size={20} className="text-white" />
+              </div>
+              <div className="text-left">
+                <p className="text-sm font-semibold text-white">AI Test Case Generator</p>
+                <p className="text-xs text-white/40">Mô tả tính năng → sinh bộ test case đầy đủ</p>
+              </div>
+              <ArrowRight size={16} className="ml-auto text-white/30 transition-colors group-hover:text-emerald-400" />
+            </button>
+          </div>
         </motion.div>
       </motion.div>
     </div>

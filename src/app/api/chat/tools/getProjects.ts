@@ -17,11 +17,11 @@ const PROJECTS_DATA = [
     link: null,
   },
   {
-    name: 'AI Document Test Case',
-    status: 'Planned',
-    description: 'Parse tài liệu → tự động sinh test case',
-    features: ['Sinh test case từ tài liệu', 'Tích hợp pytest/JUnit', 'Export test case'],
-    link: null,
+    name: 'AI Test Case Generator',
+    status: 'Đang phát triển',
+    description: 'Mô tả tính năng → tự động sinh bộ test case đầy đủ',
+    features: ['Sinh test case từ tài liệu/ý tưởng', '5 loại: functional, edge-case, negative, performance, security', 'Export CSV', 'Click status tracking'],
+    link: '/test-case',
   },
 ];
 

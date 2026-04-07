@@ -35,19 +35,19 @@ const PROJECT_CONTENT = [
     links: [],
   },
   {
-    title: 'AI Document Test Case',
-    status: 'Planned — 0%',
-    statusColor: 'text-gray-400',
+    title: 'AI Test Case Generator',
+    status: 'In Progress — 40%',
+    statusColor: 'text-emerald-400',
     description:
-      'Turn any requirements document into a complete test case suite. Covers happy paths, edge cases, and negative scenarios. Export to Excel, Jira, or TestRail.',
+      'Mô tả tính năng hoặc upload tài liệu — AI tự động sinh bộ test case đầy đủ. Bao gồm functional, edge-case, negative, performance, security. Export CSV.',
     features: [
-      'Doc → test cases (unit / integration / E2E)',
-      'Happy path + edge + negative scenarios',
-      'Export to Excel / JSON / TestRail',
-      'Review & edit before export',
+      'AI sinh 8-20 test case từ mô tả / tài liệu',
+      '5 loại: functional, edge-case, negative, performance, security',
+      'Expandable detail: precondition, steps, expected result',
+      'Click status cycle + Export CSV',
     ],
-    techStack: ['Next.js', 'AI SDK', 'xlsx', 'Jira API'],
-    date: 'Q4 2026',
+    techStack: ['Next.js 15', 'Vercel AI SDK', 'Zod', 'Tailwind CSS'],
+    date: 'Q2 2026',
     links: [],
   },
 ];
@@ -118,9 +118,9 @@ export const data = [
     content: <ProjectContent project={{ title: 'AI Document Swagger' }} />,
   },
   {
-    category: 'Planned · 0%',
-    title: 'AI Document Test Case',
+    category: 'In Progress · 40%',
+    title: 'AI Test Case Generator',
     src: '/avatar.png',
-    content: <ProjectContent project={{ title: 'AI Document Test Case' }} />,
+    content: <ProjectContent project={{ title: 'AI Test Case Generator' }} />,
   },
 ];
