@@ -23,6 +23,7 @@ function TestCaseContent() {
 
   // AI state
   const [aiInput, setAiInput] = useState('')
+  const [coverageMode, setCoverageMode] = useState<'quick' | 'full'>('quick')
   const [isGenerating, setIsGenerating] = useState(false)
   const [aiError, setAiError] = useState<string | null>(null)
   const [showAiPanel, setShowAiPanel] = useState(true)
@@ -56,7 +57,7 @@ function TestCaseContent() {
           'x-model': settings.modelId,
           ...(settings.apiKey ? { 'x-api-key': settings.apiKey } : {}),
         },
-        body: JSON.stringify({ description: aiInput }),
+        body: JSON.stringify({ description: aiInput, mode: coverageMode }),
       })
 
       const data = await res.json()
@@ -185,7 +186,31 @@ function TestCaseContent() {
                   rows={3}
                   className="w-full resize-none rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition-all focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/30 placeholder:text-white/20"
                 />
-                <div className="mt-3 flex items-center gap-2">
+                {/* Coverage mode toggle */}
+                <div className="mt-3 flex items-center gap-1 rounded-lg border border-white/10 bg-white/5 p-0.5 w-fit">
+                  <button
+                    onClick={() => setCoverageMode('quick')}
+                    className={`rounded-md px-3 py-1.5 text-[11px] font-medium transition-all ${
+                      coverageMode === 'quick'
+                        ? 'bg-emerald-600 text-white shadow'
+                        : 'text-white/40 hover:text-white/60'
+                    }`}
+                  >
+                    Quick (~15 TC)
+                  </button>
+                  <button
+                    onClick={() => setCoverageMode('full')}
+                    className={`rounded-md px-3 py-1.5 text-[11px] font-medium transition-all ${
+                      coverageMode === 'full'
+                        ? 'bg-emerald-600 text-white shadow'
+                        : 'text-white/40 hover:text-white/60'
+                    }`}
+                  >
+                    Full Coverage (~50 TC)
+                  </button>
+                </div>
+
+                <div className="mt-2.5 flex items-center gap-2">
                   <button
                     onClick={generateTestCases}
                     disabled={isGenerating || !aiInput.trim()}
