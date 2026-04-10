@@ -64,7 +64,7 @@
 
 **1. Clone repository:**
 ```bash
-git clone https://github.com/Quan359100/astrox.git
+git clone https://github.com/astroboy26032026-sketch/ai-agent-astroX.git
 cd astrox
 ```
 
